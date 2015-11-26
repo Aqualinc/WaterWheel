@@ -1,0 +1,169 @@
+#Tim Kerr
+#Aqualinc
+#April 2015
+
+#This script prepares a water wheel diagram from an array of input values
+#The diagram layout is taken from the waterwheel.exe application version 15 found in
+#G:\ARL Projects\Other\C15066_WaterWheel2\Modeling\WaterWheelSoftware\WaterWheel-v15
+#The input is an array of lists, where each list is composed of the following items
+#("indicator_name","value_name",min,bottom_line,precautionary_threshold,target,max,value)
+#Note that the scales of each indicator are assumed to be linear
+#An example of building such an array is:
+indicator_1              <-  list("indicator_name1","value_nameA",20,40,60,80,100,25)
+indicator_2              <-  list("indicator_name2","value_nameD",100,125,150,175,200,130)
+indicator_3              <-  list("indicator_name3","value_nameC",0,0.25,0.5,0.75,1,0.4)
+indicator_4              <-  list("indicator_name4","value_nameD",-1,-0.5,0,0.5,1,0)
+indicator_5              <-  list("indicator_name5","value_nameD",0,4,8,12,16,15)
+indicator_array       <-  array(c(indicator_1,indicator_2,indicator_3,indicator_4,indicator_5),dim=c(length(indicator_1),5))
+  
+#**********************************
+#  Version Description                                Person        Date
+#  2.0   Initial version                              Tim Kerr      20th April 2015 
+#  3.0   Changed to work as a function                Tim Kerr      21st April 2015
+#  3.1   Cleaned up and shrunk                        Tim Kerr      23rd April 2015
+#  3.2   Used the circlize package                    Tim Kerr      6th May 2015
+#
+#**********************************
+#To do list
+#make sure the diagram scales OK, including text
+#rotate the values text if it is at the bottom of the diagram. Might have to use the "circlize" package for that
+
+WaterWheelDiagram<-function(indicator_array)
+{
+#Load libraries
+library(plotrix)
+library(circlize)
+
+#Some useful functions
+
+#makeTransparent 
+#Converts a colour (or vector of colours) to the equivalent colour with altered transparency as given by the alpha value
+#Stolen from http://stackoverflow.com/questions/8047668/transparent-equivalent-of-given-color
+#note: always pass alpha on the 0-255 scale
+makeTransparent<-function(someColor, alpha=100)
+{
+  newColor<-col2rgb(someColor)
+  apply(newColor, 2, function(curcoldata){rgb(red=curcoldata[1], green=curcoldata[2],
+                                              blue=curcoldata[3],alpha=alpha, maxColorValue=255)})
+}
+
+
+#The main event
+
+indicator_array       <-  indicator_array[,order(unlist(indicator_array[2,]))]    #sort the indicators into value types, so that the indicators in the same value_type are plotted next to each other
+number_of_spokes      <-  dim(indicator_array)[2]                                 #the second dimension of the input array is the number of indicators and hence the number of spokes on the diagram
+value_numbers         <-  table(unlist(indicator_array[2,]))                      #this is the number of indicators in each value_type
+value_type            <-  names(value_numbers)                                    #these are the names of the value_type classes that appear on the outside of the wheel
+indicators            <-  unlist(indicator_array[1,])                             #these are the names of the indicators
+indicator_values      <-  unlist(indicator_array[8,])                             #These are the actual values of the indicators
+scaled_values         <-  indicator_values                                        #Initialise the scaled values to match the values
+for (indicator in c(1:length(indicators))) {                                      #scale to fit within 0-100 with class divisions at 25,50 and 75
+  indicator_limits    <-unlist(indicator_array[3:7,indicator])
+  scaled_values[indicator]         <-approx(indicator_limits,c(0,25,50,75,100),indicator_values[indicator])[2]
+}
+scaled_values         <-  unlist(scaled_values)                                   #convert back to a vectors
+
+quality_class         <-  c("poor","ok","better","best")                          #names used internally to keep track of the quality of the indicators
+class_colours         <-  c("red","orange","yellow","darkgreen")                  #plot colours for each of the quality classifications
+background_colours    <-  makeTransparent(class_colours,30)                       #faded plot colours for the background of the water wheel
+
+quality               <-  array(NA,dim=c(4,number_of_spokes),dimnames=list(quality_class,NULL))       #This is a matrix of indicator values for each quality classification
+quality[1,scaled_values<25]                    <-  scaled_values[scaled_values<25]                    
+quality[2,scaled_values>=25&scaled_values<50]  <-  scaled_values[scaled_values>=25&scaled_values<50]
+quality[3,scaled_values>=50&scaled_values<75]  <-  scaled_values[scaled_values>=50&scaled_values<75]
+quality[4,scaled_values>=75]                   <-  scaled_values[scaled_values>=75]
+
+hub_size                <-  20
+full_spokes             <-  rep(100+hub_size,number_of_spokes)
+spoke_positions         <-  seq(0,2*pi,length=number_of_spokes+1)[1:number_of_spokes]
+class_limits            <-  c(25,50,75,100)+hub_size                              #quality class limits needed for the background
+quality_indices         <-  colSums((data.matrix(!is.na(quality)) + 0)*row(quality))  #this builds a vector of quality class indices for each indicator
+
+#######################################
+# Plotting
+#
+# The plot is built from in the following order:
+
+# The background
+# The spokes
+# The hub
+# The Values labels
+# The indicator labels
+#######################################
+
+#Set up the radial plot axis and format
+radial.plot(100+hub_size,spoke_positions,line.col="white",
+            radlab=TRUE,start=pi/2,clockwise=TRUE,radial.lim=c(0,100+hub_size+45),radial.labels="",
+            show.radial.grid=FALSE,show.grid=FALSE)
+
+#add in the background of the plot
+for (class in seq(4,1, by = -1)){
+  symbols(0,0,circles=class_limits[class],fg="white",bg=background_colours[class],inches=FALSE,add=TRUE)
+}
+
+#plot the blank white spokes
+radial.plot(100+hub_size,spoke_positions,line.col="white",lwd=30,lend=1,
+            start=pi/2,clockwise=TRUE,radial.lim=c(0,100+hub_size),radial.labels="",
+            show.radial.grid=FALSE,show.grid=FALSE,add=TRUE)
+
+#overplot each spoke with the class values
+#These are coloured according to their quality rating
+for (class in seq(1,4, by = 1)){
+  radial.plot(quality[class,]+hub_size,spoke_positions,line.col=class_colours[class],
+              lwd=24,lend=1,start=pi/2,clockwise=TRUE,radial.lim=c(0,100+hub_size),add=TRUE)
+}
+
+#over plot the centre
+symbols(0,0,circles=22,fg="white",bg="white",inches=FALSE,add=TRUE)
+text(0,0,"THE\nWATER\n WHEEL",col="darkgray",font=2,adj=c(0.5,0.4))
+
+#Plot the outer circles with the labels using the "circlize" library
+
+# create some angles, labels and their corresponding factors
+# which determine the sectors 
+
+par(new=TRUE)       #keep the last plot and overplot the new bit
+
+number_of_values  <- length(value_type)
+value_sectors     <- seq(number_of_values)
+value_angles      <- value_numbers*360/number_of_spokes
+value_labels      <- value_type
+value_sector_ids <- factor(value_sectors, levels = value_sectors)              #This creates factors (i.e. a classed vector)
+
+number_of_indicators  <- number_of_spokes
+indicator_sectors     <- seq(number_of_indicators)
+indicator_angle       <- 360 / number_of_indicators
+indicator_angles      <- seq(from = 0, to = (360 - indicator_angle),by = indicator_angle)
+indicator_labels      <- indicators     #This is the text
+indicator_sector_ids  <- factor(indicator_sectors, levels = indicator_sectors)              #This creates factors (i.e. a classed vector)
+indicator_colours      <- class_colours[quality_indices]
+
+
+# initialize plot
+circos.par(gap.degree = 1,"track.height"=0.1,start.degree=90+180/number_of_indicators,clock.wise=TRUE)     #sets the size of the gap and the depth of the track
+
+#Plot the outer "values" circle (or track as it is called in circlize)
+circos.initialize(factors = value_sector_ids, xlim = c(0, 1),sector.width=value_angles)
+circos.trackPlotRegion(ylim = c(0, 1))
+# add text to each sector  
+lapply(value_sectors, function(sector_index){
+  circos.updatePlotRegion(sector.index = value_sector_ids[sector_index])
+  circos.text(x = 0.5, y = 0.5, labels = value_labels[sector_index], facing = "bending",niceFacing = TRUE)
+})
+par(new=TRUE)       #keep the last plot and overplot the new bit
+
+#Plot the indicator label circle
+circos.initialize(factors = indicator_sector_ids, xlim = c(0, 1))
+circos.trackPlotRegion(factors=indicator_sector_ids,ylim = c(0, 1),bg.lty=0) #this is a dummy outer circle that has no colour simply to move the plotting in a step. There is probably a more sensible way of doing this
+circos.trackPlotRegion(factors=indicator_sector_ids,ylim = c(0, 1),track.height = 0.15) #this is the one we want
+
+for (sector_index in indicator_sectors){
+  text_colour="black"
+  if(indicator_colours[sector_index]=="darkgreen"){text_colour="white"}         #change text colour to white when the background is dark green
+  circos.updatePlotRegion(sector.index = indicator_sector_ids[sector_index], bg.col=indicator_colours[sector_index])
+  circos.text(x = 0.5, y = 0.5, labels = indicator_labels[sector_index], facing = "bending",niceFacing = TRUE,col=text_colour)
+}
+
+circos.clear()
+
+}       #End of the WaterWheelDiagram function
