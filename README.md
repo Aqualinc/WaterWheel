@@ -35,7 +35,7 @@ markdown
 plotrix
 circlize
 
-From within R, open the app.R file and set the working directory is set to the directory path of app.R.
+From within R, open the app.R file and ensure the working directory is set to the directory path of app.R.
 This can be done using setwd("x") where x is the directory filepath.
 
 From within R, "Source" app. by calling:
