@@ -26,9 +26,20 @@ The code is in constant development, but provided under a "minimum viable produc
 
 To make it work:
 
-Copy all the files and folders to a directory.
+Copy all the files and folders to a directory (Use "Download ZIP" button and then extract the directory).
 
-From within R, "Source" app.R
+Install the following packages in R:
+shiny
+ggplot2
+markdown
+plotrix
+circlize
+
+From within R, open the app.R file and set the working directory is set to the directory path of app.R.
+This can be done using setwd("x") where x is the directory filepath.
+
+From within R, "Source" app. by calling:
+source("app.R")
 
 Lastly, (again from within R) call:
 
